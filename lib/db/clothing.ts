@@ -32,3 +32,28 @@ export async function getClothingItems(userId: string) {
 
   return (data ?? []) as ClothingItem[];
 }
+
+export async function updateClothingItem(
+  itemId: string,
+  userId: string,
+  updates: Partial<
+    Pick<
+      ClothingItem,
+      "name" | "brand" | "size" | "color" | "category" | "notes"
+    >
+  >,
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("clothing_items")
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", itemId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}

@@ -7,6 +7,7 @@ import {
   prepareUploadSession,
 } from "@/app/(authenticated)/add-new/actions";
 import { Button } from "@/components/ui/button";
+import { isHeicFile, normalizeImageFileForUpload } from "@/lib/images/normalize-upload";
 import {
   BUCKETS,
   extensionFromMimeType,
@@ -31,9 +32,15 @@ export function UploadPhotoForm() {
       try {
         validateImageFile(file);
 
-        const extension = extensionFromMimeType(file.type);
+        let uploadFile = file;
+        if (isHeicFile(file)) {
+          setStatus("Converting HEIC to JPEG...");
+          uploadFile = await normalizeImageFileForUpload(file);
+        }
+
+        const extension = extensionFromMimeType(uploadFile.type);
         if (!extension) {
-          throw new Error("Please upload a JPEG, PNG, or WebP image.");
+          throw new Error("Please upload a JPEG, PNG, WebP, or HEIC image.");
         }
 
         setStatus("Preparing upload...");
@@ -54,8 +61,8 @@ export function UploadPhotoForm() {
         setStatus("Uploading photo...");
         const { error: uploadError } = await supabase.storage
           .from(BUCKETS.source)
-          .upload(path, file, {
-            contentType: file.type,
+          .upload(path, uploadFile, {
+            contentType: uploadFile.type,
             upsert: false,
           });
 
@@ -81,7 +88,7 @@ export function UploadPhotoForm() {
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
         className="hidden"
         onChange={(event) => handleSubmit(event.target.files?.[0])}
       />
