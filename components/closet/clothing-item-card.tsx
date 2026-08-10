@@ -1,3 +1,4 @@
+import { formatGarmentColor } from "@/lib/constants/garment-colors";
 import type { ClothingItem } from "@/types/database";
 
 export function ClothingItemCard({
@@ -18,7 +19,11 @@ export function ClothingItemCard({
         <p className="font-medium">{item.name ?? item.category ?? "Untitled item"}</p>
         {item.brand ? <p className="text-muted-foreground">{item.brand}</p> : null}
         {item.size ? <p className="text-muted-foreground">Size: {item.size}</p> : null}
-        {item.color ? <p className="text-muted-foreground">Color: {item.color}</p> : null}
+        {item.color ? (
+          <p className="text-muted-foreground">
+            Color: {formatGarmentColor(item.color)}
+          </p>
+        ) : null}
       </div>
     </div>
   );

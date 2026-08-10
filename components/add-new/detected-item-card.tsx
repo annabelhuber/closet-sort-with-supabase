@@ -9,6 +9,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  formatGarmentColor,
+  GARMENT_COLORS,
+  resolveGarmentColor,
+} from "@/lib/constants/garment-colors";
 import type { DetectedItem } from "@/types/database";
 
 type DetectedItemCardProps = {
@@ -26,7 +31,7 @@ export function DetectedItemCard({
     name: item.name ?? "",
     brand: item.brand ?? "",
     size: item.size ?? "",
-    color: item.color ?? item.suggested_color ?? "",
+    color: resolveGarmentColor(item.color, item.suggested_color),
     category: item.category ?? item.suggested_category ?? "",
     notes: item.notes ?? "",
   });
@@ -45,6 +50,14 @@ export function DetectedItemCard({
     });
   };
 
+  const textFields = [
+    ["name", "Name"],
+    ["brand", "Brand"],
+    ["size", "Size"],
+    ["category", "Category"],
+    ["notes", "Notes"],
+  ] as const;
+
   return (
     <div className="rounded-lg border p-4 space-y-4">
       <img
@@ -53,16 +66,7 @@ export function DetectedItemCard({
         className="h-48 w-full rounded-md object-contain bg-muted"
       />
       <div className="grid gap-3">
-        {(
-          [
-            ["name", "Name"],
-            ["brand", "Brand"],
-            ["size", "Size"],
-            ["color", "Color"],
-            ["category", "Category"],
-            ["notes", "Notes"],
-          ] as const
-        ).map(([key, label]) => (
+        {textFields.map(([key, label]) => (
           <div key={key} className="grid gap-1">
             <Label htmlFor={`${item.id}-${key}`}>{label}</Label>
             <Input
@@ -78,6 +82,31 @@ export function DetectedItemCard({
             />
           </div>
         ))}
+
+        <div className="grid gap-1">
+          <Label htmlFor={`${item.id}-color`}>Color</Label>
+          <select
+            id={`${item.id}-color`}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={fields.color}
+            onChange={(event) => {
+              const color = event.target.value;
+              setFields((current) => ({ ...current, color }));
+              startTransition(async () => {
+                await updateDetectedItemAction(item.id, {
+                  ...fields,
+                  color,
+                });
+              });
+            }}
+          >
+            {GARMENT_COLORS.map((color) => (
+              <option key={color} value={color}>
+                {formatGarmentColor(color)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <div className="flex gap-2">
         <Button type="button" variant="outline" onClick={save} disabled={isPending}>
