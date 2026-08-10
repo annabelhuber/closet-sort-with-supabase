@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 
 import { confirmDetectedItemsAction } from "@/app/(authenticated)/add-new/actions";
 import { DetectedItemCard } from "@/components/add-new/detected-item-card";
+import { RegionRedrawDialog } from "@/components/add-new/region-redraw-dialog";
 import { Button } from "@/components/ui/button";
 import type { DetectedItem } from "@/types/database";
 
@@ -11,10 +12,12 @@ type ReviewItem = DetectedItem & { imageUrl: string };
 
 export function ReviewItemsForm({
   sessionId,
+  sourceImageUrl,
   initialItems,
   initialLocationSuggestions,
 }: {
   sessionId: string;
+  sourceImageUrl: string;
   initialItems: ReviewItem[];
   initialLocationSuggestions: string[];
 }) {
@@ -24,6 +27,8 @@ export function ReviewItemsForm({
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [redrawOpen, setRedrawOpen] = useState(false);
+  const [replaceItemId, setReplaceItemId] = useState<string | null>(null);
 
   const visibleItems = useMemo(() => items, [items]);
 
@@ -38,6 +43,33 @@ export function ReviewItemsForm({
       }
       return [...current, location].sort((a, b) => a.localeCompare(b));
     });
+  };
+
+  const openFixCrop = (itemId: string) => {
+    setReplaceItemId(itemId);
+    setRedrawOpen(true);
+  };
+
+  const openAddMissing = () => {
+    setReplaceItemId(null);
+    setRedrawOpen(true);
+  };
+
+  const handleRedetectComplete = (result: {
+    replacedItemId: string | null;
+    items: ReviewItem[];
+  }) => {
+    setItems((current) => {
+      const withoutReplaced = result.replacedItemId
+        ? current.filter((entry) => entry.id !== result.replacedItemId)
+        : current;
+      const existingIds = new Set(withoutReplaced.map((entry) => entry.id));
+      const additions = result.items.filter(
+        (entry) => !existingIds.has(entry.id),
+      );
+      return [...withoutReplaced, ...additions];
+    });
+    setError(null);
   };
 
   const confirmAll = () => {
@@ -55,43 +87,62 @@ export function ReviewItemsForm({
     });
   };
 
-  if (visibleItems.length === 0) {
-    return (
-      <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          No items left to review. Upload another photo or view your closet.
-        </p>
-        <div className="flex gap-2">
-          <Button asChild>
-            <a href="/add-new">Back to upload</a>
-          </Button>
-          <Button asChild variant="outline">
-            <a href="/view-closet">View closet</a>
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2">
-        {visibleItems.map((item) => (
-          <DetectedItemCard
-            key={item.id}
-            item={item}
-            imageUrl={item.imageUrl}
-            locationSuggestions={locationSuggestions}
-            onLocationCommit={rememberLocation}
-            onDiscard={() => removeItem(item.id)}
-            onSaved={() => removeItem(item.id)}
-          />
-        ))}
-      </div>
-      {error ? <p className="text-sm text-red-500">{error}</p> : null}
-      <Button type="button" onClick={confirmAll} disabled={isPending}>
-        {isPending ? "Adding to closet..." : "Add all to closet"}
-      </Button>
+      {visibleItems.length === 0 ? (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            No items left to review. Draw around a missing item, upload another
+            photo, or view your closet.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={openAddMissing}>
+              Add missing item
+            </Button>
+            <Button asChild>
+              <a href="/add-new">Back to upload</a>
+            </Button>
+            <Button asChild variant="outline">
+              <a href="/view-closet">View closet</a>
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            {visibleItems.map((item) => (
+              <DetectedItemCard
+                key={item.id}
+                item={item}
+                imageUrl={item.imageUrl}
+                locationSuggestions={locationSuggestions}
+                onLocationCommit={rememberLocation}
+                onFixCrop={() => openFixCrop(item.id)}
+                onDiscard={() => removeItem(item.id)}
+                onSaved={() => removeItem(item.id)}
+              />
+            ))}
+          </div>
+          {error ? <p className="text-sm text-red-500">{error}</p> : null}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={openAddMissing}>
+              Add missing item
+            </Button>
+            <Button type="button" onClick={confirmAll} disabled={isPending}>
+              {isPending ? "Adding to closet..." : "Add all to closet"}
+            </Button>
+          </div>
+        </>
+      )}
+
+      <RegionRedrawDialog
+        open={redrawOpen}
+        sessionId={sessionId}
+        sourceImageUrl={sourceImageUrl}
+        replaceItemId={replaceItemId}
+        onClose={() => setRedrawOpen(false)}
+        onComplete={handleRedetectComplete}
+      />
     </div>
   );
 }

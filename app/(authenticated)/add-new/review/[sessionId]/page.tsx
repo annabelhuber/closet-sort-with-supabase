@@ -43,19 +43,28 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
     redirect("/add-new");
   }
 
-  const job = await getLatestJobForSession(
-    sessionId,
-    user.id,
-    JOB_TYPES.DETECT_GARMENTS,
-  );
+  // Only gate on the original detect job when the session is not yet in review.
+  // Redetect jobs use a different type and must not boot the user out of review.
+  if (session.status !== SESSION_STATUS.READY_FOR_REVIEW) {
+    const job = await getLatestJobForSession(
+      sessionId,
+      user.id,
+      JOB_TYPES.DETECT_GARMENTS,
+    );
 
-  if (!job || job.status !== JOB_STATUS.SUCCEEDED) {
-    redirect(`/add-new/processing/${sessionId}`);
+    if (!job || job.status !== JOB_STATUS.SUCCEEDED) {
+      redirect(`/add-new/processing/${sessionId}`);
+    }
   }
 
-  const [items, locationSuggestions] = await Promise.all([
+  if (!session.source_image_path) {
+    redirect("/add-new");
+  }
+
+  const [items, locationSuggestions, sourceImageUrl] = await Promise.all([
     getDetectedItemsBySession(sessionId, user.id),
     getClothingLocations(user.id),
+    getSignedUrl(BUCKETS.source, session.source_image_path),
   ]);
   const reviewItems = await Promise.all(
     items.map(async (item) => ({
@@ -70,10 +79,12 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
         <h1 className="text-2xl font-bold">Review detected items</h1>
         <p className="mt-2 text-muted-foreground">
           Edit the suggested details for each item, then add them to your closet.
+          Use Fix crop if an outline looks wrong.
         </p>
       </div>
       <ReviewItemsForm
         sessionId={sessionId}
+        sourceImageUrl={sourceImageUrl}
         initialItems={reviewItems}
         initialLocationSuggestions={locationSuggestions}
       />

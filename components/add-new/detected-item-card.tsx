@@ -28,6 +28,7 @@ type DetectedItemCardProps = {
   imageUrl: string;
   locationSuggestions: string[];
   onLocationCommit?: (location: string) => void;
+  onFixCrop: () => void;
   onDiscard: () => void;
   onSaved: () => void;
 };
@@ -37,6 +38,7 @@ export function DetectedItemCard({
   imageUrl,
   locationSuggestions,
   onLocationCommit,
+  onFixCrop,
   onDiscard,
   onSaved,
 }: DetectedItemCardProps) {
@@ -214,6 +216,14 @@ export function DetectedItemCard({
       <div className="flex gap-2">
         <Button type="button" onClick={saveToCloset} disabled={isPending}>
           {isPending ? "Saving..." : "Save"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onFixCrop}
+          disabled={isPending}
+        >
+          Fix crop
         </Button>
         <Button
           type="button"

@@ -1,6 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 import { confirmDetectedItems, discardDetectedItem, getDetectedItem, getDetectedItemsBySession, updateDetectedItem } from "@/lib/db/detected-items";
 import { createClothingItem } from "@/lib/db/clothing";
@@ -20,10 +22,11 @@ import {
   JOB_TYPES,
   SESSION_STATUS,
 } from "@/lib/processing/constants";
-import { triggerDetection } from "@/lib/processing/detect-client";
+import { triggerDetection, triggerRedetection, triggerRedetectPreview } from "@/lib/processing/detect-client";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BUCKETS, displayPhotoPath } from "@/lib/storage/paths";
+import { getSignedUrl } from "@/lib/storage/signed-url";
 import {
   updateDetectedItemSchema,
   type UpdateItemFields,
@@ -331,4 +334,152 @@ export async function confirmDetectedItemsAction(sessionId: string) {
   });
 
   redirect("/view-closet");
+}
+
+const regionPointSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+});
+
+const redetectRegionSchema = z.object({
+  sessionId: z.string().uuid(),
+  points: z.array(regionPointSchema).min(3),
+  replaceItemId: z.string().uuid().optional().nullable(),
+  sensitivity: z.number().min(0).max(100).optional().default(50),
+});
+
+const redetectPreviewSchema = z.object({
+  sessionId: z.string().uuid(),
+  points: z.array(regionPointSchema).min(3),
+  sensitivity: z.number().min(0).max(100).optional().default(50),
+});
+
+export async function previewRedetectRegionAction(input: {
+  sessionId: string;
+  points: Array<{ x: number; y: number }>;
+  sensitivity?: number;
+}) {
+  const { id: userId } = await requireUser();
+  const parsed = redetectPreviewSchema.parse(input);
+
+  const session = await getUploadSession(parsed.sessionId, userId);
+  if (!session?.source_image_path) {
+    throw new Error("Upload session is missing a source photo.");
+  }
+
+  if (
+    session.status !== SESSION_STATUS.READY_FOR_REVIEW &&
+    session.status !== SESSION_STATUS.PROCESSING
+  ) {
+    throw new Error("This upload session is not available for redetection.");
+  }
+
+  const result = await triggerRedetectPreview({
+    sessionId: parsed.sessionId,
+    userId,
+    sourcePath: session.source_image_path,
+    points: parsed.points,
+    sensitivity: parsed.sensitivity,
+  });
+
+  return {
+    items: (result.items ?? []).map((item) => ({
+      imageUrl: `data:image/png;base64,${item.image_base64}`,
+      suggestedCategory: item.suggested_category,
+      suggestedColor: item.suggested_color,
+      detectionConfidence: item.detection_confidence,
+    })),
+  };
+}
+
+export async function redetectRegionAction(input: {
+  sessionId: string;
+  points: Array<{ x: number; y: number }>;
+  replaceItemId?: string | null;
+  sensitivity?: number;
+}) {
+  const { id: userId } = await requireUser();
+  const parsed = redetectRegionSchema.parse(input);
+
+  const session = await getUploadSession(parsed.sessionId, userId);
+  if (!session?.source_image_path) {
+    throw new Error("Upload session is missing a source photo.");
+  }
+
+  if (
+    session.status !== SESSION_STATUS.READY_FOR_REVIEW &&
+    session.status !== SESSION_STATUS.PROCESSING
+  ) {
+    throw new Error("This upload session is not available for redetection.");
+  }
+
+  if (parsed.replaceItemId) {
+    const existing = await getDetectedItem(parsed.replaceItemId, userId);
+    if (
+      !existing ||
+      existing.upload_session_id !== parsed.sessionId ||
+      existing.status !== DETECTED_ITEM_STATUS.DETECTED
+    ) {
+      throw new Error("The item to replace was not found.");
+    }
+  }
+
+  const job = await createProcessingJob({
+    userId,
+    uploadSessionId: parsed.sessionId,
+    jobType: JOB_TYPES.REDETECT_GARMENTS,
+    detectedItemId: parsed.replaceItemId ?? undefined,
+    payload: {
+      source_path: session.source_image_path,
+      bucket: BUCKETS.source,
+      region: { points: parsed.points },
+      replace_item_id: parsed.replaceItemId ?? null,
+      sensitivity: parsed.sensitivity,
+    },
+  });
+
+  try {
+    const result = await triggerRedetection({
+      jobId: job.id,
+      sessionId: parsed.sessionId,
+      userId,
+      sourcePath: session.source_image_path,
+      points: parsed.points,
+      replaceItemId: parsed.replaceItemId,
+      sensitivity: parsed.sensitivity,
+    });
+
+    const newItems = await Promise.all(
+      (result.items ?? []).map(async (item) => {
+        const full = await getDetectedItem(item.id, userId);
+        if (!full) {
+          return null;
+        }
+        return {
+          ...full,
+          imageUrl: await getSignedUrl(
+            BUCKETS.processed,
+            full.processed_image_path,
+          ),
+        };
+      }),
+    );
+
+    revalidatePath(`/add-new/review/${parsed.sessionId}`);
+
+    return {
+      replacedItemId: parsed.replaceItemId ?? null,
+      items: newItems.filter(
+        (item): item is DetectedItem & { imageUrl: string } => item != null,
+      ),
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Redetection failed.";
+    await updateProcessingJob(job.id, {
+      status: JOB_STATUS.FAILED,
+      error_message: message,
+    });
+    throw new Error(message);
+  }
 }

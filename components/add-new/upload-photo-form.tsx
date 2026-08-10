@@ -77,7 +77,12 @@ export function UploadPhotoForm() {
         setError(
           uploadError instanceof Error
             ? uploadError.message
-            : "Upload failed.",
+            : typeof uploadError === "object" &&
+                uploadError &&
+                "message" in uploadError &&
+                typeof (uploadError as { message: unknown }).message === "string"
+              ? (uploadError as { message: string }).message
+              : "Upload failed.",
         );
       }
     });

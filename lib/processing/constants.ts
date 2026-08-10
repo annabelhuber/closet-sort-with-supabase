@@ -1,5 +1,6 @@
 export const JOB_TYPES = {
   DETECT_GARMENTS: "detect_garments",
+  REDETECT_GARMENTS: "redetect_garments",
   OCR_TAG: "ocr_tag",
 } as const;
 
