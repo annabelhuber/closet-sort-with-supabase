@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { BUCKETS } from "@/lib/storage/paths";
 import { getSignedUrl } from "@/lib/storage/signed-url";
-import { updateDetectedItemSchema } from "@/lib/validations/upload";
+import { updateDetectedItemSchema, type UpdateItemFields } from "@/lib/validations/upload";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -81,7 +81,7 @@ async function rotateDisplayImage(
 
 export async function updateClothingItemAction(input: {
   itemId: string;
-  fields: Record<string, string | null | undefined>;
+  fields: UpdateItemFields;
   rotationDegrees?: number;
 }) {
   const { id: userId } = await requireUser();

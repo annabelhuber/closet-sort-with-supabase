@@ -49,13 +49,43 @@ export async function getClothingItem(itemId: string, userId: string) {
   return (data as ClothingItem | null) ?? null;
 }
 
+export async function getClothingLocations(userId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("clothing_items")
+    .select("location")
+    .eq("user_id", userId)
+    .not("location", "is", null);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const locations = new Set<string>();
+  for (const row of data ?? []) {
+    const location = row.location?.trim();
+    if (location) {
+      locations.add(location);
+    }
+  }
+
+  return [...locations].sort((a, b) => a.localeCompare(b));
+}
+
 export async function updateClothingItem(
   itemId: string,
   userId: string,
   updates: Partial<
     Pick<
       ClothingItem,
-      "name" | "brand" | "size" | "color" | "category" | "notes"
+      | "name"
+      | "brand"
+      | "size"
+      | "color"
+      | "category"
+      | "notes"
+      | "location"
+      | "laundry"
     >
   >,
 ) {

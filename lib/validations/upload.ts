@@ -19,7 +19,20 @@ export const updateDetectedItemSchema = z.object({
   color: z.string().max(50).optional().nullable(),
   category: z.string().max(100).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
+  location: z
+    .string()
+    .max(200)
+    .optional()
+    .nullable()
+    .transform((value) => {
+      if (value == null) return null;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }),
+  laundry: z.boolean().optional().default(false),
 });
+
+export type UpdateItemFields = z.infer<typeof updateDetectedItemSchema>;
 
 export function validateImageFile(file: File) {
   const mime = file.type.toLowerCase();

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { ReviewItemsForm } from "@/components/add-new/review-items-form";
+import { getClothingLocations } from "@/lib/db/clothing";
 import { getDetectedItemsBySession } from "@/lib/db/detected-items";
 import { getLatestJobForSession } from "@/lib/db/processing-jobs";
 import { getUploadSession } from "@/lib/db/upload-sessions";
@@ -52,7 +53,10 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
     redirect(`/add-new/processing/${sessionId}`);
   }
 
-  const items = await getDetectedItemsBySession(sessionId, user.id);
+  const [items, locationSuggestions] = await Promise.all([
+    getDetectedItemsBySession(sessionId, user.id),
+    getClothingLocations(user.id),
+  ]);
   const reviewItems = await Promise.all(
     items.map(async (item) => ({
       ...item,
@@ -68,7 +72,11 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
           Edit the suggested details for each item, then add them to your closet.
         </p>
       </div>
-      <ReviewItemsForm sessionId={sessionId} initialItems={reviewItems} />
+      <ReviewItemsForm
+        sessionId={sessionId}
+        initialItems={reviewItems}
+        initialLocationSuggestions={locationSuggestions}
+      />
     </div>
   );
 }

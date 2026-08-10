@@ -12,11 +12,16 @@ type ReviewItem = DetectedItem & { imageUrl: string };
 export function ReviewItemsForm({
   sessionId,
   initialItems,
+  initialLocationSuggestions,
 }: {
   sessionId: string;
   initialItems: ReviewItem[];
+  initialLocationSuggestions: string[];
 }) {
   const [items, setItems] = useState(initialItems);
+  const [locationSuggestions, setLocationSuggestions] = useState(
+    initialLocationSuggestions,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -24,6 +29,15 @@ export function ReviewItemsForm({
 
   const removeItem = (itemId: string) => {
     setItems((current) => current.filter((entry) => entry.id !== itemId));
+  };
+
+  const rememberLocation = (location: string) => {
+    setLocationSuggestions((current) => {
+      if (current.includes(location)) {
+        return current;
+      }
+      return [...current, location].sort((a, b) => a.localeCompare(b));
+    });
   };
 
   const confirmAll = () => {
@@ -67,6 +81,8 @@ export function ReviewItemsForm({
             key={item.id}
             item={item}
             imageUrl={item.imageUrl}
+            locationSuggestions={locationSuggestions}
+            onLocationCommit={rememberLocation}
             onDiscard={() => removeItem(item.id)}
             onSaved={() => removeItem(item.id)}
           />

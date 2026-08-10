@@ -26,6 +26,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { BUCKETS, displayPhotoPath } from "@/lib/storage/paths";
 import {
   updateDetectedItemSchema,
+  type UpdateItemFields,
 } from "@/lib/validations/upload";
 import type { DetectedItem } from "@/types/database";
 
@@ -186,7 +187,7 @@ export async function getProcessingState(sessionId: string) {
 
 export async function updateDetectedItemAction(
   itemId: string,
-  input: Record<string, string | null | undefined>,
+  input: UpdateItemFields,
 ) {
   const { id: userId } = await requireUser();
   const parsed = updateDetectedItemSchema.parse(input);
@@ -253,6 +254,8 @@ async function createClothingItemFromDetected(
     color: item.color ?? item.suggested_color ?? null,
     category: item.category ?? item.suggested_category ?? null,
     notes: item.notes ?? null,
+    location: item.location ?? null,
+    laundry: item.laundry ?? false,
   });
 
   return item.id;
@@ -260,7 +263,7 @@ async function createClothingItemFromDetected(
 
 export async function confirmDetectedItemAction(
   itemId: string,
-  input: Record<string, string | null | undefined>,
+  input: UpdateItemFields,
   rotationDegrees = 0,
 ) {
   const { id: userId } = await requireUser();
@@ -277,6 +280,8 @@ export async function confirmDetectedItemAction(
     ...parsed,
     color: parsed.color ?? item.color,
     category: parsed.category ?? item.category,
+    location: parsed.location ?? item.location,
+    laundry: parsed.laundry ?? item.laundry ?? false,
   };
 
   await createClothingItemFromDetected(userId, updatedItem, rotationDegrees);

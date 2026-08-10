@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { ClothingItemCard } from "@/components/closet/clothing-item-card";
+import { ClosetItemsGrid } from "@/components/closet/closet-items-grid";
 import { Button } from "@/components/ui/button";
-import { getClothingItems } from "@/lib/db/clothing";
+import { getClothingItems, getClothingLocations } from "@/lib/db/clothing";
 import { BUCKETS } from "@/lib/storage/paths";
 import { getSignedUrl } from "@/lib/storage/signed-url";
 import { createClient } from "@/lib/supabase/server";
@@ -18,7 +18,10 @@ export default async function ViewClosetPage() {
     redirect("/");
   }
 
-  const items = await getClothingItems(user.id);
+  const [items, locationSuggestions] = await Promise.all([
+    getClothingItems(user.id),
+    getClothingLocations(user.id),
+  ]);
   const closetItems = await Promise.all(
     items.map(async (item) => ({
       item,
@@ -50,11 +53,10 @@ export default async function ViewClosetPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {closetItems.map(({ item, imageUrl }) => (
-            <ClothingItemCard key={item.id} item={item} imageUrl={imageUrl} />
-          ))}
-        </div>
+        <ClosetItemsGrid
+          items={closetItems}
+          initialLocationSuggestions={locationSuggestions}
+        />
       )}
     </div>
   );
