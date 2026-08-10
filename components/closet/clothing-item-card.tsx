@@ -14,11 +14,6 @@ import {
 } from "@/lib/constants/garment-colors";
 import type { ClothingItem } from "@/types/database";
 
-function withCacheBust(url: string) {
-  const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}v=${Date.now()}`;
-}
-
 export function ClothingItemCard({
   item,
   imageUrl,
@@ -28,6 +23,7 @@ export function ClothingItemCard({
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [displayImageUrl, setDisplayImageUrl] = useState(imageUrl);
+  const [imageVersion, setImageVersion] = useState(0);
   const [rotationDegrees, setRotationDegrees] = useState(0);
   const [fields, setFields] = useState({
     name: item.name ?? "",
@@ -63,10 +59,15 @@ export function ClothingItemCard({
     setError(null);
     startTransition(async () => {
       try {
-        await updateClothingItemAction(item.id, fields, rotationDegrees);
+        const result = await updateClothingItemAction({
+          itemId: item.id,
+          fields,
+          rotationDegrees,
+        });
         setSavedFields(fields);
         setRotationDegrees(0);
-        setDisplayImageUrl(withCacheBust(imageUrl));
+        setDisplayImageUrl(result.imageUrl);
+        setImageVersion((version) => version + 1);
         setIsEditing(false);
       } catch (saveError) {
         setError(
@@ -90,6 +91,7 @@ export function ClothingItemCard({
     <div className="rounded-lg border">
       <div className="p-3 pb-0">
         <RotatableImage
+          key={`${item.id}-${imageVersion}`}
           src={displayImageUrl}
           alt={savedFields.name || savedFields.category || "Clothing item"}
           rotationDegrees={isEditing ? rotationDegrees : 0}
