@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { confirmDetectedItems, discardDetectedItem, getDetectedItemsBySession, updateDetectedItem } from "@/lib/db/detected-items";
+import { confirmDetectedItems, discardDetectedItem, getDetectedItem, getDetectedItemsBySession, updateDetectedItem } from "@/lib/db/detected-items";
 import { createClothingItem } from "@/lib/db/clothing";
 import {
   createProcessingJob,
@@ -27,6 +27,7 @@ import { BUCKETS, displayPhotoPath } from "@/lib/storage/paths";
 import {
   updateDetectedItemSchema,
 } from "@/lib/validations/upload";
+import type { DetectedItem } from "@/types/database";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -197,6 +198,101 @@ export async function discardDetectedItemAction(itemId: string) {
   await discardDetectedItem(itemId, userId);
 }
 
+async function createClothingItemFromDetected(
+  userId: string,
+  item: DetectedItem,
+  rotationDegrees: number,
+) {
+
+  const admin = createAdminClient();
+  const clothingItemId = crypto.randomUUID();
+  const displayPath = displayPhotoPath(userId, clothingItemId);
+
+  const { data: processedFile, error: downloadError } = await admin.storage
+    .from(BUCKETS.processed)
+    .download(item.processed_image_path);
+
+  if (downloadError || !processedFile) {
+    throw new Error(
+      downloadError?.message ?? "Failed to download processed image.",
+    );
+  }
+
+  const sharp = (await import("sharp")).default;
+  const sourceBuffer = Buffer.from(await processedFile.arrayBuffer());
+  const normalizedRotation = ((rotationDegrees % 360) + 360) % 360;
+  const outputBuffer =
+    normalizedRotation === 0
+      ? sourceBuffer
+      : await sharp(sourceBuffer).rotate(normalizedRotation).png().toBuffer();
+
+  const { error: uploadError } = await admin.storage
+    .from(BUCKETS.display)
+    .upload(displayPath, outputBuffer, {
+      contentType: "image/png",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  await createClothingItem({
+    id: clothingItemId,
+    user_id: userId,
+    detected_item_id: item.id,
+    display_image_path: displayPath,
+    name: item.name ?? null,
+    brand: item.brand ?? null,
+    size: item.size ?? null,
+    color: item.color ?? item.suggested_color ?? null,
+    category: item.category ?? item.suggested_category ?? null,
+    notes: item.notes ?? null,
+  });
+
+  return item.id;
+}
+
+export async function confirmDetectedItemAction(
+  itemId: string,
+  input: Record<string, string | null | undefined>,
+  rotationDegrees = 0,
+) {
+  const { id: userId } = await requireUser();
+  const parsed = updateDetectedItemSchema.parse(input);
+  await updateDetectedItem(itemId, userId, parsed);
+
+  const item = await getDetectedItem(itemId, userId);
+  if (!item || item.status !== DETECTED_ITEM_STATUS.DETECTED) {
+    throw new Error("This item is not available to save.");
+  }
+
+  const updatedItem = {
+    ...item,
+    ...parsed,
+    color: parsed.color ?? item.color,
+    category: parsed.category ?? item.category,
+  };
+
+  await createClothingItemFromDetected(userId, updatedItem, rotationDegrees);
+  await confirmDetectedItems([itemId], userId);
+
+  const remaining = await getDetectedItemsBySession(
+    item.upload_session_id,
+    userId,
+  );
+
+  if (remaining.length === 0) {
+    await updateUploadSession(item.upload_session_id, {
+      status: SESSION_STATUS.COMPLETED,
+      error_message: null,
+    });
+    return { sessionComplete: true as const };
+  }
+
+  return { sessionComplete: false as const };
+}
+
 export async function confirmDetectedItemsAction(sessionId: string) {
   const { id: userId } = await requireUser();
   const session = await getUploadSession(sessionId, userId);
@@ -211,47 +307,10 @@ export async function confirmDetectedItemsAction(sessionId: string) {
     throw new Error("No items to add to your closet.");
   }
 
-  const admin = createAdminClient();
   const confirmedIds: string[] = [];
 
   for (const item of items) {
-    const clothingItemId = crypto.randomUUID();
-    const displayPath = displayPhotoPath(userId, clothingItemId);
-
-    const { data: processedFile, error: downloadError } = await admin.storage
-      .from(BUCKETS.processed)
-      .download(item.processed_image_path);
-
-    if (downloadError || !processedFile) {
-      throw new Error(
-        downloadError?.message ?? "Failed to download processed image.",
-      );
-    }
-
-    const { error: uploadError } = await admin.storage
-      .from(BUCKETS.display)
-      .upload(displayPath, processedFile, {
-        contentType: "image/png",
-        upsert: false,
-      });
-
-    if (uploadError) {
-      throw new Error(uploadError.message);
-    }
-
-    await createClothingItem({
-      id: clothingItemId,
-      user_id: userId,
-      detected_item_id: item.id,
-      display_image_path: displayPath,
-      name: item.name ?? null,
-      brand: item.brand ?? null,
-      size: item.size ?? null,
-      color: item.color ?? item.suggested_color ?? null,
-      category: item.category ?? item.suggested_category ?? null,
-      notes: item.notes ?? null,
-    });
-
+    await createClothingItemFromDetected(userId, item, 0);
     confirmedIds.push(item.id);
   }
 

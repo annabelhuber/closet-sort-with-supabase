@@ -12,7 +12,7 @@ export async function getDetectedItemsBySession(
     .select("*")
     .eq("upload_session_id", sessionId)
     .eq("user_id", userId)
-    .neq("status", DETECTED_ITEM_STATUS.DISCARDED)
+    .eq("status", DETECTED_ITEM_STATUS.DETECTED)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -20,6 +20,22 @@ export async function getDetectedItemsBySession(
   }
 
   return (data ?? []) as DetectedItem[];
+}
+
+export async function getDetectedItem(itemId: string, userId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("detected_items")
+    .select("*")
+    .eq("id", itemId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as DetectedItem | null) ?? null;
 }
 
 export async function updateDetectedItem(
@@ -49,6 +65,10 @@ export async function discardDetectedItem(itemId: string, userId: string) {
 }
 
 export async function confirmDetectedItems(itemIds: string[], userId: string) {
+  if (itemIds.length === 0) {
+    return;
+  }
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("detected_items")

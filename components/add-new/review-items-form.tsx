@@ -22,7 +22,11 @@ export function ReviewItemsForm({
 
   const visibleItems = useMemo(() => items, [items]);
 
-  const confirm = () => {
+  const removeItem = (itemId: string) => {
+    setItems((current) => current.filter((entry) => entry.id !== itemId));
+  };
+
+  const confirmAll = () => {
     setError(null);
     startTransition(async () => {
       try {
@@ -41,11 +45,16 @@ export function ReviewItemsForm({
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          No items left to review. Upload another photo to try again.
+          No items left to review. Upload another photo or view your closet.
         </p>
-        <Button asChild>
-          <a href="/add-new">Back to upload</a>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild>
+            <a href="/add-new">Back to upload</a>
+          </Button>
+          <Button asChild variant="outline">
+            <a href="/view-closet">View closet</a>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -58,15 +67,14 @@ export function ReviewItemsForm({
             key={item.id}
             item={item}
             imageUrl={item.imageUrl}
-            onDiscard={() =>
-              setItems((current) => current.filter((entry) => entry.id !== item.id))
-            }
+            onDiscard={() => removeItem(item.id)}
+            onSaved={() => removeItem(item.id)}
           />
         ))}
       </div>
       {error ? <p className="text-sm text-red-500">{error}</p> : null}
-      <Button type="button" onClick={confirm} disabled={isPending}>
-        {isPending ? "Adding to closet..." : "Add to closet"}
+      <Button type="button" onClick={confirmAll} disabled={isPending}>
+        {isPending ? "Adding to closet..." : "Add all to closet"}
       </Button>
     </div>
   );

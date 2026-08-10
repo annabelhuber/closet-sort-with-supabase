@@ -1,8 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import {
+  confirmDetectedItemAction,
   discardDetectedItemAction,
   updateDetectedItemAction,
 } from "@/app/(authenticated)/add-new/actions";
@@ -20,13 +22,16 @@ type DetectedItemCardProps = {
   item: DetectedItem;
   imageUrl: string;
   onDiscard: () => void;
+  onSaved: () => void;
 };
 
 export function DetectedItemCard({
   item,
   imageUrl,
   onDiscard,
+  onSaved,
 }: DetectedItemCardProps) {
+  const router = useRouter();
   const [fields, setFields] = useState({
     name: item.name ?? "",
     brand: item.brand ?? "",
@@ -35,11 +40,36 @@ export function DetectedItemCard({
     category: item.category ?? item.suggested_category ?? "",
     notes: item.notes ?? "",
   });
+  const [rotationDegrees, setRotationDegrees] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const save = () => {
+  const persistFields = () => {
     startTransition(async () => {
       await updateDetectedItemAction(item.id, fields);
+    });
+  };
+
+  const saveToCloset = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await confirmDetectedItemAction(
+          item.id,
+          fields,
+          rotationDegrees,
+        );
+        onSaved();
+        if (result.sessionComplete) {
+          router.push("/view-closet");
+        }
+      } catch (saveError) {
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : "Failed to save item to closet.",
+        );
+      }
     });
   };
 
@@ -48,6 +78,10 @@ export function DetectedItemCard({
       await discardDetectedItemAction(item.id);
       onDiscard();
     });
+  };
+
+  const rotateClockwise = () => {
+    setRotationDegrees((current) => (current + 90) % 360);
   };
 
   const textFields = [
@@ -60,11 +94,25 @@ export function DetectedItemCard({
 
   return (
     <div className="rounded-lg border p-4 space-y-4">
-      <img
-        src={imageUrl}
-        alt={fields.category || "Detected clothing item"}
-        className="h-48 w-full rounded-md object-contain bg-muted"
-      />
+      <div className="space-y-2">
+        <div className="flex h-48 w-full items-center justify-center overflow-hidden rounded-md bg-muted">
+          <img
+            src={imageUrl}
+            alt={fields.category || "Detected clothing item"}
+            className="max-h-full max-w-full object-contain transition-transform duration-200"
+            style={{ transform: `rotate(${rotationDegrees}deg)` }}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={rotateClockwise}
+          disabled={isPending}
+        >
+          Rotate ↻
+        </Button>
+      </div>
       <div className="grid gap-3">
         {textFields.map(([key, label]) => (
           <div key={key} className="grid gap-1">
@@ -78,7 +126,7 @@ export function DetectedItemCard({
                   [key]: event.target.value,
                 }))
               }
-              onBlur={save}
+              onBlur={persistFields}
             />
           </div>
         ))}
@@ -108,9 +156,10 @@ export function DetectedItemCard({
           </select>
         </div>
       </div>
+      {error ? <p className="text-sm text-red-500">{error}</p> : null}
       <div className="flex gap-2">
-        <Button type="button" variant="outline" onClick={save} disabled={isPending}>
-          Save
+        <Button type="button" onClick={saveToCloset} disabled={isPending}>
+          {isPending ? "Saving..." : "Save"}
         </Button>
         <Button
           type="button"
