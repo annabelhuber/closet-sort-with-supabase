@@ -107,44 +107,58 @@ export function nearestGarmentColorFromHex(hex: string): GarmentColor {
   const v255 = v * 255;
   const h179 = h / 2;
 
-  if (s255 < 50) {
-    if (v255 <= 105) return "black";
-    if (v255 >= 210) return "white";
-    return "gray";
-  }
-  if (v255 <= 80 && s255 < 85) return "black";
+  // Chromatic first when saturation is meaningful
+  if (s255 >= 50) {
+    if (v255 <= 100 && h179 >= 95 && h179 <= 130) return "navy";
+    if (v255 <= 95 && (h179 <= 10 || h179 >= 168)) return "maroon";
+    if (v255 <= 100 && h179 >= 10 && h179 <= 30) return "brown";
 
-  if (s255 < 75 && h179 >= 10 && h179 <= 35) {
-    if (v255 > 205) return "cream";
-    if (v255 > 155) return "beige";
-    if (v255 > 55) return "brown";
-  }
+    if (s255 < 80 && h179 >= 10 && h179 <= 35 && v255 >= 150) {
+      return v255 >= 195 ? "cream" : "beige";
+    }
 
-  if (h179 <= 10 || h179 >= 168) {
+    if (h179 <= 10 || h179 >= 168) {
+      if (isPinkishRgb(r, g, b) && v255 >= 115) return "pink";
+      if (v255 < 95 || (v255 < 115 && s255 > 110)) return "maroon";
+      return "red";
+    }
+    if (h179 <= 18) return v255 < 130 ? "brown" : "orange";
+    if (h179 <= 32) {
+      if (v255 < 115 && s255 >= 60) return "brown";
+      if (s255 < 95 && v255 > 165) return v255 < 220 ? "beige" : "cream";
+      return "yellow";
+    }
+    if (h179 <= 85) return "green";
+    if (h179 <= 95) return "blue";
+    if (h179 <= 130) return v255 < 120 ? "navy" : "blue";
+    if (h179 <= 152) {
+      if (v255 >= 165 && r >= 160 && b > g + 20) return "pink";
+      return "purple";
+    }
+    if (h179 <= 168) return v255 < 115 && r < 140 ? "purple" : "pink";
     if (isPinkishRgb(r, g, b) && v255 >= 115) return "pink";
-    if (v255 < 95 || (v255 < 115 && s255 > 110)) return "maroon";
+    if (v255 < 95) return "maroon";
     return "red";
   }
-  if (h179 <= 18) return v255 < 130 ? "brown" : "orange";
-  if (h179 <= 32) {
-    if (v255 < 115 && s255 >= 60) return "brown";
-    if (s255 < 95 && v255 > 165) return v255 < 220 ? "beige" : "cream";
-    return "yellow";
+
+  // Neutrals
+  if (v255 <= 125) return "black";
+  if (v255 >= 185) {
+    if (h179 >= 15 && h179 <= 40 && s255 >= 18) return "cream";
+    return "white";
   }
-  if (h179 <= 85) return "green";
-  if (h179 <= 95) return "blue";
-  if (h179 <= 125) return v255 < 115 ? "navy" : "blue";
-  if (h179 <= 152) {
-    if (v255 >= 165 && r >= 160 && b > g + 20) return "pink";
-    return "purple";
+  if (v255 >= 160) {
+    if (h179 >= 12 && h179 <= 40 && s255 >= 15) {
+      return v255 >= 175 ? "cream" : "beige";
+    }
+    if (s255 < 35) return "white";
+    return "gray";
   }
-  if (h179 <= 168) {
-    if (v255 < 115 && r < 140) return "purple";
-    return "pink";
+  if (h179 >= 12 && h179 <= 40 && s255 >= 20) {
+    if (v255 >= 140) return "beige";
+    if (v255 >= 80) return "brown";
   }
-  if (isPinkishRgb(r, g, b) && v255 >= 115) return "pink";
-  if (v255 < 95) return "maroon";
-  return "red";
+  return "gray";
 }
 
 /**
