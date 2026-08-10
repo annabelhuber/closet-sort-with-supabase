@@ -224,7 +224,12 @@ async function createClothingItemFromDetected(
   const outputBuffer =
     normalizedRotation === 0
       ? sourceBuffer
-      : await sharp(sourceBuffer).rotate(normalizedRotation).png().toBuffer();
+      : await sharp(sourceBuffer)
+          .rotate(normalizedRotation, {
+            background: { r: 0, g: 0, b: 0, alpha: 0 },
+          })
+          .png()
+          .toBuffer();
 
   const { error: uploadError } = await admin.storage
     .from(BUCKETS.display)

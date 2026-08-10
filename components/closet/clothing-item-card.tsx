@@ -6,12 +6,18 @@ import { updateClothingItemAction } from "@/app/(authenticated)/view-closet/acti
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RotatableImage } from "@/components/ui/rotatable-image";
 import {
   formatGarmentColor,
   GARMENT_COLORS,
   resolveGarmentColor,
 } from "@/lib/constants/garment-colors";
 import type { ClothingItem } from "@/types/database";
+
+function withCacheBust(url: string) {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}v=${Date.now()}`;
+}
 
 export function ClothingItemCard({
   item,
@@ -21,6 +27,8 @@ export function ClothingItemCard({
   imageUrl: string;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [displayImageUrl, setDisplayImageUrl] = useState(imageUrl);
+  const [rotationDegrees, setRotationDegrees] = useState(0);
   const [fields, setFields] = useState({
     name: item.name ?? "",
     brand: item.brand ?? "",
@@ -35,22 +43,30 @@ export function ClothingItemCard({
 
   const startEditing = () => {
     setFields(savedFields);
+    setRotationDegrees(0);
     setError(null);
     setIsEditing(true);
   };
 
   const cancelEditing = () => {
     setFields(savedFields);
+    setRotationDegrees(0);
     setError(null);
     setIsEditing(false);
+  };
+
+  const rotateClockwise = () => {
+    setRotationDegrees((current) => (current + 90) % 360);
   };
 
   const save = () => {
     setError(null);
     startTransition(async () => {
       try {
-        await updateClothingItemAction(item.id, fields);
+        await updateClothingItemAction(item.id, fields, rotationDegrees);
         setSavedFields(fields);
+        setRotationDegrees(0);
+        setDisplayImageUrl(withCacheBust(imageUrl));
         setIsEditing(false);
       } catch (saveError) {
         setError(
@@ -71,15 +87,26 @@ export function ClothingItemCard({
   ] as const;
 
   return (
-    <div className="rounded-lg border overflow-hidden">
-      <img
-        src={imageUrl}
-        alt={savedFields.name || savedFields.category || "Clothing item"}
-        className="h-48 w-full object-contain bg-muted"
-      />
+    <div className="rounded-lg border">
+      <div className="p-3 pb-0">
+        <RotatableImage
+          src={displayImageUrl}
+          alt={savedFields.name || savedFields.category || "Clothing item"}
+          rotationDegrees={isEditing ? rotationDegrees : 0}
+        />
+      </div>
       <div className="p-3 space-y-3 text-sm">
         {isEditing ? (
           <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={rotateClockwise}
+              disabled={isPending}
+            >
+              Rotate ↻
+            </Button>
             <div className="grid gap-3">
               {textFields.map(([key, label]) => (
                 <div key={key} className="grid gap-1">

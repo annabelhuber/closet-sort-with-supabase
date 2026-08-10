@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RotatableImage } from "@/components/ui/rotatable-image";
 import {
   formatGarmentColor,
   GARMENT_COLORS,
@@ -95,14 +96,11 @@ export function DetectedItemCard({
   return (
     <div className="rounded-lg border p-4 space-y-4">
       <div className="space-y-2">
-        <div className="flex h-48 w-full items-center justify-center overflow-hidden rounded-md bg-muted">
-          <img
-            src={imageUrl}
-            alt={fields.category || "Detected clothing item"}
-            className="max-h-full max-w-full object-contain transition-transform duration-200"
-            style={{ transform: `rotate(${rotationDegrees}deg)` }}
-          />
-        </div>
+        <RotatableImage
+          src={imageUrl}
+          alt={fields.category || "Detected clothing item"}
+          rotationDegrees={rotationDegrees}
+        />
         <Button
           type="button"
           variant="outline"

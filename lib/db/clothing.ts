@@ -33,6 +33,22 @@ export async function getClothingItems(userId: string) {
   return (data ?? []) as ClothingItem[];
 }
 
+export async function getClothingItem(itemId: string, userId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("clothing_items")
+    .select("*")
+    .eq("id", itemId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as ClothingItem | null) ?? null;
+}
+
 export async function updateClothingItem(
   itemId: string,
   userId: string,
