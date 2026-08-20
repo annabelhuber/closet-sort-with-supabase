@@ -31,6 +31,8 @@ import {
   updateDetectedItemSchema,
   type UpdateItemFields,
 } from "@/lib/validations/upload";
+import { resolveGarmentTaxonomy } from "@/lib/constants/garment-categories";
+import { sanitizeLength } from "@/lib/constants/garment-lengths";
 import type { DetectedItem } from "@/types/database";
 
 async function requireUser() {
@@ -246,6 +248,17 @@ async function createClothingItemFromDetected(
     throw new Error(uploadError.message);
   }
 
+  const taxonomy = resolveGarmentTaxonomy(
+    item.category,
+    item.subcategory,
+    item.suggested_category,
+  );
+  const length = sanitizeLength(
+    item.length,
+    taxonomy.category,
+    taxonomy.subcategory,
+  );
+
   await createClothingItem({
     id: clothingItemId,
     user_id: userId,
@@ -255,7 +268,9 @@ async function createClothingItemFromDetected(
     brand: item.brand ?? null,
     size: item.size ?? null,
     color: item.color ?? item.suggested_color ?? null,
-    category: item.category ?? item.suggested_category ?? null,
+    category: taxonomy.category || null,
+    subcategory: taxonomy.subcategory || null,
+    length: length || null,
     notes: item.notes ?? null,
     location: item.location ?? null,
     laundry: item.laundry ?? false,
@@ -283,6 +298,8 @@ export async function confirmDetectedItemAction(
     ...parsed,
     color: parsed.color ?? item.color,
     category: parsed.category ?? item.category,
+    subcategory: parsed.subcategory ?? item.subcategory,
+    length: parsed.length ?? item.length,
     location: parsed.location ?? item.location,
     laundry: parsed.laundry ?? item.laundry ?? false,
   };

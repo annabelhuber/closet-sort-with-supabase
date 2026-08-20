@@ -93,6 +93,8 @@ export type Database = {
           size: string | null;
           color: string | null;
           category: string | null;
+          subcategory: string | null;
+          length: string | null;
           notes: string | null;
           location: string | null;
           laundry: boolean;
@@ -113,6 +115,8 @@ export type Database = {
           size?: string | null;
           color?: string | null;
           category?: string | null;
+          subcategory?: string | null;
+          length?: string | null;
           notes?: string | null;
           location?: string | null;
           laundry?: boolean;
@@ -133,6 +137,8 @@ export type Database = {
           size?: string | null;
           color?: string | null;
           category?: string | null;
+          subcategory?: string | null;
+          length?: string | null;
           notes?: string | null;
           location?: string | null;
           laundry?: boolean;
@@ -152,6 +158,8 @@ export type Database = {
           size: string | null;
           color: string | null;
           category: string | null;
+          subcategory: string | null;
+          length: string | null;
           notes: string | null;
           location: string | null;
           laundry: boolean;
@@ -168,6 +176,8 @@ export type Database = {
           size?: string | null;
           color?: string | null;
           category?: string | null;
+          subcategory?: string | null;
+          length?: string | null;
           notes?: string | null;
           location?: string | null;
           laundry?: boolean;
@@ -184,6 +194,8 @@ export type Database = {
           size?: string | null;
           color?: string | null;
           category?: string | null;
+          subcategory?: string | null;
+          length?: string | null;
           notes?: string | null;
           location?: string | null;
           laundry?: boolean;

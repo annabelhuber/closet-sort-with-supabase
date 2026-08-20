@@ -10,18 +10,23 @@ import {
 } from "@/app/(authenticated)/add-new/actions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { GarmentCategorySelect } from "@/components/ui/garment-category-select";
+import {
+  GarmentTaxonomyFields,
+  taxonomyFromResolved,
+  type TaxonomyFormSlice,
+} from "@/components/ui/garment-taxonomy-fields";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LocationInput } from "@/components/ui/location-input";
 import { RotatableImage } from "@/components/ui/rotatable-image";
-import { resolveGarmentCategory } from "@/lib/constants/garment-categories";
+import { resolveGarmentTaxonomy } from "@/lib/constants/garment-categories";
 import {
   formatGarmentColor,
   GARMENT_COLORS,
   resolveGarmentColor,
 } from "@/lib/constants/garment-colors";
 import type { DetectedItem } from "@/types/database";
+import type { UpdateItemFields } from "@/lib/validations/upload";
 
 type DetectedItemCardProps = {
   item: DetectedItem;
@@ -33,6 +38,42 @@ type DetectedItemCardProps = {
   onSaved: () => void;
 };
 
+function buildInitialFields(item: DetectedItem) {
+  const taxonomy = taxonomyFromResolved(
+    resolveGarmentTaxonomy(
+      item.category,
+      item.subcategory,
+      item.suggested_category,
+    ),
+    item.length,
+  );
+  return {
+    name: item.name ?? "",
+    brand: item.brand ?? "",
+    size: item.size ?? "",
+    color: resolveGarmentColor(item.color, item.suggested_color),
+    notes: item.notes ?? "",
+    location: item.location ?? "",
+    laundry: item.laundry ?? false,
+    ...taxonomy,
+  };
+}
+
+function toPersistPayload(fields: ReturnType<typeof buildInitialFields>): UpdateItemFields {
+  return {
+    name: fields.name,
+    brand: fields.brand,
+    size: fields.size,
+    color: fields.color,
+    category: fields.category || null,
+    subcategory: fields.subcategory || null,
+    length: fields.length || null,
+    notes: fields.notes,
+    location: fields.location,
+    laundry: fields.laundry,
+  };
+}
+
 export function DetectedItemCard({
   item,
   imageUrl,
@@ -43,23 +84,14 @@ export function DetectedItemCard({
   onSaved,
 }: DetectedItemCardProps) {
   const router = useRouter();
-  const [fields, setFields] = useState({
-    name: item.name ?? "",
-    brand: item.brand ?? "",
-    size: item.size ?? "",
-    color: resolveGarmentColor(item.color, item.suggested_color),
-    category: resolveGarmentCategory(item.category, item.suggested_category),
-    notes: item.notes ?? "",
-    location: item.location ?? "",
-    laundry: item.laundry ?? false,
-  });
+  const [fields, setFields] = useState(() => buildInitialFields(item));
   const [rotationDegrees, setRotationDegrees] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const persistFields = (nextFields = fields) => {
     startTransition(async () => {
-      await updateDetectedItemAction(item.id, nextFields);
+      await updateDetectedItemAction(item.id, toPersistPayload(nextFields));
     });
   };
 
@@ -69,7 +101,7 @@ export function DetectedItemCard({
       try {
         const result = await confirmDetectedItemAction(
           item.id,
-          fields,
+          toPersistPayload(fields),
           rotationDegrees,
         );
         if (fields.location.trim()) {
@@ -100,6 +132,12 @@ export function DetectedItemCard({
     setRotationDegrees((current) => (current + 90) % 360);
   };
 
+  const applyTaxonomy = (taxonomy: TaxonomyFormSlice) => {
+    const nextFields = { ...fields, ...taxonomy };
+    setFields(nextFields);
+    persistFields(nextFields);
+  };
+
   const textFields = [
     ["name", "Name"],
     ["brand", "Brand"],
@@ -107,12 +145,14 @@ export function DetectedItemCard({
     ["notes", "Notes"],
   ] as const;
 
+  const displayCategory = fields.subcategory || fields.category;
+
   return (
     <div className="rounded-lg border p-4 space-y-4">
       <div className="space-y-2">
         <RotatableImage
           src={imageUrl}
-          alt={fields.category || "Detected clothing item"}
+          alt={displayCategory || "Detected clothing item"}
           rotationDegrees={rotationDegrees}
         />
         <Button
@@ -143,19 +183,12 @@ export function DetectedItemCard({
           </div>
         ))}
 
-        <div className="grid gap-1">
-          <Label htmlFor={`${item.id}-category`}>Category</Label>
-          <GarmentCategorySelect
-            id={`${item.id}-category`}
-            value={fields.category}
-            disabled={isPending}
-            onChange={(category) => {
-              const nextFields = { ...fields, category };
-              setFields(nextFields);
-              persistFields(nextFields);
-            }}
-          />
-        </div>
+        <GarmentTaxonomyFields
+          idPrefix={item.id}
+          fields={fields}
+          disabled={isPending}
+          onChange={applyTaxonomy}
+        />
 
         <div className="grid gap-1">
           <Label htmlFor={`${item.id}-color`}>Color</Label>
@@ -164,7 +197,7 @@ export function DetectedItemCard({
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             value={fields.color}
             onChange={(event) => {
-              const color = event.target.value;
+              const color = event.target.value as typeof fields.color;
               const nextFields = { ...fields, color };
               setFields(nextFields);
               persistFields(nextFields);

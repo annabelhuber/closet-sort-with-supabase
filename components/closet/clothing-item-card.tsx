@@ -5,21 +5,61 @@ import { useState, useTransition } from "react";
 import { updateClothingItemAction } from "@/app/(authenticated)/view-closet/actions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { GarmentCategorySelect } from "@/components/ui/garment-category-select";
+import {
+  GarmentTaxonomyFields,
+  taxonomyFromResolved,
+  type TaxonomyFormSlice,
+} from "@/components/ui/garment-taxonomy-fields";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LocationInput } from "@/components/ui/location-input";
 import { RotatableImage } from "@/components/ui/rotatable-image";
 import {
   formatGarmentCategory,
-  resolveGarmentCategory,
+  resolveGarmentTaxonomy,
 } from "@/lib/constants/garment-categories";
 import {
   formatGarmentColor,
   GARMENT_COLORS,
   resolveGarmentColor,
 } from "@/lib/constants/garment-colors";
+import { formatGarmentLength } from "@/lib/constants/garment-lengths";
 import type { ClothingItem } from "@/types/database";
+import type { UpdateItemFields } from "@/lib/validations/upload";
+
+function buildInitialFields(item: ClothingItem) {
+  const taxonomy = taxonomyFromResolved(
+    resolveGarmentTaxonomy(item.category, item.subcategory),
+    item.length,
+  );
+  return {
+    name: item.name ?? "",
+    brand: item.brand ?? "",
+    size: item.size ?? "",
+    color: resolveGarmentColor(item.color),
+    notes: item.notes ?? "",
+    location: item.location ?? "",
+    laundry: item.laundry ?? false,
+    ...taxonomy,
+  };
+}
+
+function toPersistPayload(
+  fields: ReturnType<typeof buildInitialFields>,
+): UpdateItemFields {
+  return {
+    name: fields.name,
+    brand: fields.brand,
+    size: fields.size,
+    color: fields.color,
+    category: fields.category || null,
+    subcategory: fields.subcategory || null,
+    length: fields.length || null,
+    notes: fields.notes,
+    location: fields.location,
+    laundry: fields.laundry,
+  };
+}
 
 export function ClothingItemCard({
   item,
@@ -36,16 +76,7 @@ export function ClothingItemCard({
   const [displayImageUrl, setDisplayImageUrl] = useState(imageUrl);
   const [imageVersion, setImageVersion] = useState(0);
   const [rotationDegrees, setRotationDegrees] = useState(0);
-  const [fields, setFields] = useState({
-    name: item.name ?? "",
-    brand: item.brand ?? "",
-    size: item.size ?? "",
-    color: resolveGarmentColor(item.color),
-    category: resolveGarmentCategory(item.category),
-    notes: item.notes ?? "",
-    location: item.location ?? "",
-    laundry: item.laundry ?? false,
-  });
+  const [fields, setFields] = useState(() => buildInitialFields(item));
   const [savedFields, setSavedFields] = useState(fields);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -74,7 +105,7 @@ export function ClothingItemCard({
       try {
         const result = await updateClothingItemAction({
           itemId: item.id,
-          fields,
+          fields: toPersistPayload(fields),
           rotationDegrees,
         });
         setSavedFields(fields);
@@ -102,13 +133,20 @@ export function ClothingItemCard({
     ["notes", "Notes"],
   ] as const;
 
+  const displayCategoryLabel = (slice: TaxonomyFormSlice) =>
+    formatGarmentCategory(slice.subcategory || slice.category);
+
   return (
     <div className="rounded-lg border">
       <div className="p-3 pb-0">
         <RotatableImage
           key={`${item.id}-${imageVersion}`}
           src={displayImageUrl}
-          alt={savedFields.name || savedFields.category || "Clothing item"}
+          alt={
+            savedFields.name ||
+            displayCategoryLabel(savedFields) ||
+            "Clothing item"
+          }
           rotationDegrees={isEditing ? rotationDegrees : 0}
         />
       </div>
@@ -140,17 +178,14 @@ export function ClothingItemCard({
                   />
                 </div>
               ))}
-              <div className="grid gap-1">
-                <Label htmlFor={`${item.id}-category`}>Category</Label>
-                <GarmentCategorySelect
-                  id={`${item.id}-category`}
-                  value={fields.category}
-                  disabled={isPending}
-                  onChange={(category) =>
-                    setFields((current) => ({ ...current, category }))
-                  }
-                />
-              </div>
+              <GarmentTaxonomyFields
+                idPrefix={item.id}
+                fields={fields}
+                disabled={isPending}
+                onChange={(taxonomy) =>
+                  setFields((current) => ({ ...current, ...taxonomy }))
+                }
+              />
               <div className="grid gap-1">
                 <Label htmlFor={`${item.id}-color`}>Color</Label>
                 <select
@@ -160,7 +195,7 @@ export function ClothingItemCard({
                   onChange={(event) =>
                     setFields((current) => ({
                       ...current,
-                      color: event.target.value,
+                      color: event.target.value as typeof current.color,
                     }))
                   }
                 >
@@ -219,7 +254,7 @@ export function ClothingItemCard({
             <div className="space-y-1">
               <p className="font-medium">
                 {savedFields.name ||
-                  formatGarmentCategory(savedFields.category) ||
+                  displayCategoryLabel(savedFields) ||
                   "Untitled item"}
               </p>
               {savedFields.brand ? (
@@ -233,9 +268,14 @@ export function ClothingItemCard({
                   Color: {formatGarmentColor(savedFields.color)}
                 </p>
               ) : null}
-              {savedFields.category ? (
+              {savedFields.category || savedFields.subcategory ? (
                 <p className="text-muted-foreground">
-                  Category: {formatGarmentCategory(savedFields.category)}
+                  Category: {displayCategoryLabel(savedFields)}
+                </p>
+              ) : null}
+              {savedFields.length ? (
+                <p className="text-muted-foreground">
+                  Length: {formatGarmentLength(savedFields.length)}
                 </p>
               ) : null}
               {savedFields.location ? (

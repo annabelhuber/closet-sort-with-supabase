@@ -83,6 +83,8 @@ export async function updateClothingItem(
       | "size"
       | "color"
       | "category"
+      | "subcategory"
+      | "length"
       | "notes"
       | "location"
       | "laundry"

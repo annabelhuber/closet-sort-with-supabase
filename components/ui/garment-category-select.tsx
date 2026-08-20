@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  encodeCategoryOption,
   formatGarmentCategory,
   GARMENT_CATEGORY_GROUPS,
   isGarmentCategory,
@@ -22,7 +23,14 @@ export function GarmentCategorySelect({
   onChange,
   disabled,
 }: GarmentCategorySelectProps) {
-  const includeLegacyValue = Boolean(value) && !isGarmentCategory(value);
+  const knownValues = new Set<string>();
+  for (const group of GARMENT_CATEGORY_GROUPS) {
+    knownValues.add(group.coarse);
+    for (const category of group.categories) {
+      knownValues.add(encodeCategoryOption(group.coarse, category));
+    }
+  }
+  const includeLegacyValue = Boolean(value) && !knownValues.has(value) && !isGarmentCategory(value);
 
   return (
     <select
@@ -39,11 +47,14 @@ export function GarmentCategorySelect({
       {GARMENT_CATEGORY_GROUPS.map((group) => (
         <optgroup key={group.coarse} label={group.label}>
           <option value={group.coarse}>{group.label}</option>
-          {group.categories.map((category) => (
-            <option key={`${group.coarse}-${category}`} value={category}>
-              {formatGarmentCategory(category)}
-            </option>
-          ))}
+          {group.categories.map((category) => {
+            const optionValue = encodeCategoryOption(group.coarse, category);
+            return (
+              <option key={optionValue} value={optionValue}>
+                {formatGarmentCategory(category)}
+              </option>
+            );
+          })}
         </optgroup>
       ))}
     </select>
