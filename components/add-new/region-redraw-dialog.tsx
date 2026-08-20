@@ -32,6 +32,8 @@ type RegionRedrawDialogProps = {
   sessionId: string;
   sourceImageUrl: string;
   replaceItemId?: string | null;
+  /** Existing outline in source-image coordinates (Fix crop adjust-first). */
+  initialOutlinePoints?: Point[] | null;
   /** When true, start with a closed outline around the full photo. */
   initialFullFrame?: boolean;
   /** Empty auto-detect recovery vs fixing/adding. */
@@ -52,6 +54,16 @@ function fullFramePoints(width: number, height: number): Point[] {
     { x: maxX, y: maxY },
     { x: 0, y: maxY },
   ];
+}
+
+function normalizeOutlinePoints(points?: Point[] | null): Point[] {
+  if (!points || points.length < 3) {
+    return [];
+  }
+  return points.map((point) => ({
+    x: Number(point.x),
+    y: Number(point.y),
+  }));
 }
 
 function measureImageLayout(
@@ -87,6 +99,7 @@ export function RegionRedrawDialog({
   sessionId,
   sourceImageUrl,
   replaceItemId = null,
+  initialOutlinePoints = null,
   initialFullFrame = false,
   mode = "fix",
   onClose,
@@ -98,6 +111,8 @@ export function RegionRedrawDialog({
   const shouldSeedFullFrame = useRef(false);
   const [points, setPoints] = useState<Point[]>([]);
   const [closed, setClosed] = useState(false);
+  /** When true, clicks place/edit outline points. When false, only sensitivity. */
+  const [drawingEnabled, setDrawingEnabled] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [layout, setLayout] = useState<ImageLayout | null>(null);
@@ -121,6 +136,7 @@ export function RegionRedrawDialog({
     shouldSeedFullFrame.current = false;
     setPoints(fullFramePoints(image.naturalWidth, image.naturalHeight));
     setClosed(true);
+    setDrawingEnabled(false);
   }, []);
 
   const refreshLayout = useCallback(() => {
@@ -137,15 +153,33 @@ export function RegionRedrawDialog({
     if (!open) {
       return;
     }
-    setPoints([]);
-    setClosed(false);
+
+    const seeded = normalizeOutlinePoints(initialOutlinePoints);
+    const hasSavedOutline = seeded.length >= 3 && mode === "fix";
+
     setError(null);
     setLayout(null);
     setSensitivity(50);
     setHarshCrop(false);
     clearPreview();
-    shouldSeedFullFrame.current = initialFullFrame;
-    // If the image is already cached/loaded, seed immediately.
+
+    if (hasSavedOutline) {
+      setPoints(seeded);
+      setClosed(true);
+      setDrawingEnabled(false);
+      shouldSeedFullFrame.current = false;
+    } else if (initialFullFrame) {
+      setPoints([]);
+      setClosed(false);
+      setDrawingEnabled(false);
+      shouldSeedFullFrame.current = true;
+    } else {
+      setPoints([]);
+      setClosed(false);
+      setDrawingEnabled(true);
+      shouldSeedFullFrame.current = false;
+    }
+
     const image = imageRef.current;
     if (image?.complete) {
       refreshLayout();
@@ -154,7 +188,9 @@ export function RegionRedrawDialog({
     open,
     sourceImageUrl,
     replaceItemId,
+    initialOutlinePoints,
     initialFullFrame,
+    mode,
     clearPreview,
     refreshLayout,
   ]);
@@ -178,7 +214,12 @@ export function RegionRedrawDialog({
       if (event.key === "Escape" && !isPending && mode !== "no_detection") {
         onClose();
       }
-      if (event.key === "Enter" && points.length >= 3 && !closed) {
+      if (
+        drawingEnabled &&
+        event.key === "Enter" &&
+        points.length >= 3 &&
+        !closed
+      ) {
         event.preventDefault();
         setClosed(true);
       }
@@ -186,7 +227,15 @@ export function RegionRedrawDialog({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, isPending, onClose, points.length, closed, mode]);
+  }, [
+    open,
+    isPending,
+    onClose,
+    points.length,
+    closed,
+    mode,
+    drawingEnabled,
+  ]);
 
   useEffect(() => {
     if (!open || !closed || points.length < 3 || isPending) {
@@ -267,7 +316,7 @@ export function RegionRedrawDialog({
   );
 
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (isPending || closed) {
+    if (isPending || closed || !drawingEnabled) {
       return;
     }
     const point = clientToImagePoint(event.clientX, event.clientY);
@@ -279,9 +328,16 @@ export function RegionRedrawDialog({
 
   const handleDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
-    if (points.length >= 3) {
+    if (drawingEnabled && points.length >= 3) {
       setClosed(true);
     }
+  };
+
+  const startRedraw = () => {
+    setPoints([]);
+    setClosed(false);
+    setDrawingEnabled(true);
+    clearPreview();
   };
 
   const runDetection = () => {
@@ -333,6 +389,7 @@ export function RegionRedrawDialog({
     .join(" ");
 
   const canPreview = closed && points.length >= 3;
+  const adjustingExisting = !drawingEnabled && canPreview;
   const title =
     mode === "no_detection"
       ? "No clothing detected"
@@ -341,8 +398,10 @@ export function RegionRedrawDialog({
         : "Add missing item";
   const description =
     mode === "no_detection"
-      ? "We couldn’t find clothing automatically. The full photo is selected—adjust the outline and sensitivity until the crop looks right, then save."
-      : "Click to place points around the clothing. Close the shape, then adjust sensitivity to preview the crop before saving.";
+      ? "We couldn’t find clothing automatically. The full photo is selected—adjust sensitivity until the crop looks right, or redraw the outline."
+      : adjustingExisting
+        ? "Adjust sensitivity on the current outline. Redraw the outline only if you need a different shape."
+        : "Click to place points around the clothing. Close the shape, then adjust sensitivity to preview the crop before saving.";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -357,7 +416,9 @@ export function RegionRedrawDialog({
             <p className="text-sm font-medium">Source</p>
             <div
               ref={containerRef}
-              className="relative min-h-[240px] w-full cursor-crosshair overflow-hidden rounded-md bg-muted md:min-h-[320px]"
+              className={`relative min-h-[240px] w-full overflow-hidden rounded-md bg-muted md:min-h-[320px] ${
+                drawingEnabled && !closed ? "cursor-crosshair" : "cursor-default"
+              }`}
               onClick={handleClick}
               onDoubleClick={handleDoubleClick}
             >
@@ -412,7 +473,9 @@ export function RegionRedrawDialog({
             <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 rounded-md bg-muted p-3 md:min-h-[320px]">
               {!canPreview ? (
                 <p className="px-4 text-center text-sm text-muted-foreground">
-                  Close the shape to preview the detected crop.
+                  {drawingEnabled
+                    ? "Close the shape to preview the detected crop."
+                    : "Loading outline…"}
                 </p>
               ) : previewCrops.length > 0 ? (
                 <div className="flex w-full flex-wrap items-start justify-center gap-3">
@@ -510,50 +573,63 @@ export function RegionRedrawDialog({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isPending || points.length === 0}
-            onClick={() => {
-              setPoints((current) => current.slice(0, -1));
-              setClosed(false);
-              clearPreview();
-            }}
-          >
-            Undo
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isPending || points.length === 0}
-            onClick={() => {
-              setPoints([]);
-              setClosed(false);
-              clearPreview();
-            }}
-          >
-            Clear
-          </Button>
-          {closed ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isPending}
-              onClick={() => {
-                setClosed(false);
-                clearPreview();
-              }}
-            >
-              Edit outline
-            </Button>
+          {drawingEnabled ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending || points.length === 0}
+                onClick={() => {
+                  setPoints((current) => current.slice(0, -1));
+                  setClosed(false);
+                  clearPreview();
+                }}
+              >
+                Undo
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending || points.length === 0}
+                onClick={() => {
+                  setPoints([]);
+                  setClosed(false);
+                  clearPreview();
+                }}
+              >
+                Clear
+              </Button>
+              {closed ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending}
+                  onClick={() => {
+                    setClosed(false);
+                    clearPreview();
+                  }}
+                >
+                  Edit outline
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending || points.length < 3}
+                  onClick={() => setClosed(true)}
+                >
+                  Close shape
+                </Button>
+              )}
+            </>
           ) : (
             <Button
               type="button"
               variant="outline"
-              disabled={isPending || points.length < 3}
-              onClick={() => setClosed(true)}
+              disabled={isPending}
+              onClick={startRedraw}
             >
-              Close shape
+              Redraw outline
             </Button>
           )}
           <div className="flex-1" />

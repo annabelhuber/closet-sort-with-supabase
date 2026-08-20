@@ -53,10 +53,13 @@ export function GarmentTaxonomyFields({
   disabled,
   onChange,
 }: GarmentTaxonomyFieldsProps) {
-  const subOptions = getSubcategories(fields.category);
+  const subOptions = isBroadCategory(fields.category)
+    ? getSubcategories(fields.category)
+    : [];
+  // Show Sub-category whenever Category is showing a broad parent (even after a
+  // sub is chosen). Hide it only when Category is displaying a fine/child value.
   const showSubcategory =
     isBroadCategory(fields.category) &&
-    !fields.subcategory &&
     fields.uiCategory === fields.category &&
     subOptions.length > 0;
 
@@ -92,7 +95,9 @@ export function GarmentTaxonomyFields({
           <select
             id={`${idPrefix}-subcategory`}
             className={selectClassName}
-            value={fields.subcategory}
+            value={
+              subOptions.includes(fields.subcategory) ? fields.subcategory : ""
+            }
             disabled={disabled}
             onChange={(event) => {
               const taxonomy = applySubcategorySelection(

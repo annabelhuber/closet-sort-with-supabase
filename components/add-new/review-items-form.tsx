@@ -30,6 +30,9 @@ export function ReviewItemsForm({
   const [isPending, startTransition] = useTransition();
   const [redrawOpen, setRedrawOpen] = useState(startedEmpty);
   const [replaceItemId, setReplaceItemId] = useState<string | null>(null);
+  const [initialOutlinePoints, setInitialOutlinePoints] = useState<
+    Array<{ x: number; y: number }> | null
+  >(null);
   const [redrawMode, setRedrawMode] = useState<"fix" | "add" | "no_detection">(
     startedEmpty ? "no_detection" : "fix",
   );
@@ -50,13 +53,16 @@ export function ReviewItemsForm({
   };
 
   const openFixCrop = (itemId: string) => {
+    const item = items.find((entry) => entry.id === itemId);
     setReplaceItemId(itemId);
+    setInitialOutlinePoints(item?.outline_points ?? null);
     setRedrawMode("fix");
     setRedrawOpen(true);
   };
 
   const openAddMissing = (mode: "add" | "no_detection" = "add") => {
     setReplaceItemId(null);
+    setInitialOutlinePoints(null);
     setRedrawMode(mode);
     setRedrawOpen(true);
   };
@@ -156,6 +162,7 @@ export function ReviewItemsForm({
         sessionId={sessionId}
         sourceImageUrl={sourceImageUrl}
         replaceItemId={replaceItemId}
+        initialOutlinePoints={initialOutlinePoints}
         initialFullFrame={redrawMode === "no_detection"}
         mode={redrawMode}
         onClose={() => setRedrawOpen(false)}

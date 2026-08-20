@@ -171,11 +171,13 @@ export function resolveGarmentTaxonomy(
       getParentCategory(sub, cat) ??
       getParentCategory(sub, suggested) ??
       getParentCategory(sub);
+    const broad = parent ?? (isBroadCategory(cat) ? cat : "");
+    // Keep the broad category visible; subcategory sits in its own field.
     return {
-      category: parent ?? cat,
+      category: broad,
       subcategory: sub,
-      uiCategory: encodeCategoryOption(parent ?? cat, sub),
-      showSubcategory: false,
+      uiCategory: broad,
+      showSubcategory: Boolean(broad) && isBroadCategory(broad),
     };
   }
 
@@ -185,8 +187,8 @@ export function resolveGarmentTaxonomy(
     return {
       category: parent ?? "",
       subcategory: cat,
-      uiCategory: encodeCategoryOption(parent ?? "", cat),
-      showSubcategory: false,
+      uiCategory: parent ?? "",
+      showSubcategory: Boolean(parent),
     };
   }
 
@@ -213,8 +215,8 @@ export function resolveGarmentTaxonomy(
     return {
       category: parent ?? "",
       subcategory: suggested,
-      uiCategory: encodeCategoryOption(parent ?? "", suggested),
-      showSubcategory: false,
+      uiCategory: parent ?? "",
+      showSubcategory: Boolean(parent),
     };
   }
 
@@ -245,9 +247,14 @@ export function applyCategorySelection(
   }
 
   if (isBroadCategory(selection)) {
+    const allowed = getSubcategories(selection);
+    const keepSub =
+      previous?.subcategory && allowed.includes(previous.subcategory)
+        ? previous.subcategory
+        : "";
     return {
       category: selection,
-      subcategory: "",
+      subcategory: keepSub,
       uiCategory: selection,
       showSubcategory: true,
     };
@@ -258,6 +265,7 @@ export function applyCategorySelection(
       preferredBroad ??
       getParentCategory(selection, previous?.category) ??
       getParentCategory(selection);
+    // Child chosen from Category: show the child, hide the Sub-category field.
     return {
       category: parent ?? "",
       subcategory: selection,
@@ -279,21 +287,19 @@ export function applySubcategorySelection(
   broad: string,
   subcategory: string,
 ): GarmentTaxonomy {
-  if (!subcategory) {
-    return {
-      category: broad,
-      subcategory: "",
-      uiCategory: broad,
-      showSubcategory: isBroadCategory(broad),
-    };
-  }
-  const parent =
-    getParentCategory(subcategory, broad) ?? getParentCategory(subcategory);
+  const parent = isBroadCategory(broad)
+    ? broad
+    : (getParentCategory(subcategory, broad) ?? broad);
+  const allowed = getSubcategories(parent);
+  const nextSub =
+    subcategory && allowed.includes(subcategory) ? subcategory : "";
+
+  // Keep the Category control on the parent; Sub-category stays visible.
   return {
-    category: parent ?? broad,
-    subcategory,
-    uiCategory: encodeCategoryOption(parent ?? broad, subcategory),
-    showSubcategory: false,
+    category: parent,
+    subcategory: nextSub,
+    uiCategory: parent,
+    showSubcategory: isBroadCategory(parent) && allowed.length > 0,
   };
 }
 

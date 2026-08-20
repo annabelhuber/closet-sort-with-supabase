@@ -88,6 +88,7 @@ export type Database = {
           suggested_category: string | null;
           suggested_color: string | null;
           detection_confidence: number | null;
+          outline_points: Array<{ x: number; y: number }> | null;
           name: string | null;
           brand: string | null;
           size: string | null;
@@ -110,6 +111,7 @@ export type Database = {
           suggested_category?: string | null;
           suggested_color?: string | null;
           detection_confidence?: number | null;
+          outline_points?: Array<{ x: number; y: number }> | null;
           name?: string | null;
           brand?: string | null;
           size?: string | null;
@@ -132,6 +134,7 @@ export type Database = {
           suggested_category?: string | null;
           suggested_color?: string | null;
           detection_confidence?: number | null;
+          outline_points?: Array<{ x: number; y: number }> | null;
           name?: string | null;
           brand?: string | null;
           size?: string | null;
