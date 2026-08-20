@@ -90,6 +90,7 @@ export async function triggerRedetection({
   points,
   replaceItemId,
   sensitivity = 50,
+  harshCrop = false,
 }: {
   jobId: string;
   sessionId: string;
@@ -98,6 +99,7 @@ export async function triggerRedetection({
   points: DetectionPoint[];
   replaceItemId?: string | null;
   sensitivity?: number;
+  harshCrop?: boolean;
 }) {
   return postToProcessor("/v1/redetect", {
     job_id: jobId,
@@ -107,6 +109,7 @@ export async function triggerRedetection({
     region: { points },
     replace_item_id: replaceItemId ?? null,
     sensitivity,
+    harsh_crop: harshCrop,
   }) as Promise<{
     ok: boolean;
     item_count: number;
@@ -121,12 +124,14 @@ export async function triggerRedetectPreview({
   sourcePath,
   points,
   sensitivity = 50,
+  harshCrop = false,
 }: {
   sessionId: string;
   userId: string;
   sourcePath: string;
   points: DetectionPoint[];
   sensitivity?: number;
+  harshCrop?: boolean;
 }) {
   return postToProcessor("/v1/redetect/preview", {
     session_id: sessionId,
@@ -134,6 +139,7 @@ export async function triggerRedetectPreview({
     source_path: sourcePath,
     region: { points },
     sensitivity,
+    harsh_crop: harshCrop,
   }) as Promise<{
     ok: boolean;
     item_count: number;

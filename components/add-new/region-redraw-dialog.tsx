@@ -102,6 +102,7 @@ export function RegionRedrawDialog({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [layout, setLayout] = useState<ImageLayout | null>(null);
   const [sensitivity, setSensitivity] = useState(50);
+  const [harshCrop, setHarshCrop] = useState(false);
   const [previewCrops, setPreviewCrops] = useState<PreviewCrop[]>([]);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -141,6 +142,7 @@ export function RegionRedrawDialog({
     setError(null);
     setLayout(null);
     setSensitivity(50);
+    setHarshCrop(false);
     clearPreview();
     shouldSeedFullFrame.current = initialFullFrame;
     // If the image is already cached/loaded, seed immediately.
@@ -200,6 +202,7 @@ export function RegionRedrawDialog({
           sessionId,
           points,
           sensitivity,
+          harshCrop,
         });
         if (previewRequestId.current !== requestId) {
           return;
@@ -207,7 +210,9 @@ export function RegionRedrawDialog({
         setPreviewCrops(result.items);
         if (result.items.length === 0) {
           setPreviewError(
-            "No clothing detected at this sensitivity. Try raising it or tightening the outline.",
+            harshCrop
+              ? "Could not build a harsh crop from this outline."
+              : "No clothing detected at this sensitivity. Try raising it or tightening the outline.",
           );
         }
       } catch (previewFailure) {
@@ -230,7 +235,7 @@ export function RegionRedrawDialog({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [open, closed, points, sensitivity, sessionId, isPending]);
+  }, [open, closed, points, sensitivity, harshCrop, sessionId, isPending]);
 
   const clientToImagePoint = useCallback(
     (clientX: number, clientY: number): Point | null => {
@@ -293,6 +298,7 @@ export function RegionRedrawDialog({
           points,
           replaceItemId,
           sensitivity,
+          harshCrop,
         });
         onComplete(result);
         onClose();
@@ -454,6 +460,24 @@ export function RegionRedrawDialog({
         ) : null}
 
         <div className="grid gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={harshCrop ? "default" : "outline"}
+              disabled={isPending || !canPreview}
+              onClick={() => setHarshCrop((current) => !current)}
+            >
+              {harshCrop ? "Using harsh crop" : "Use harsh crop"}
+            </Button>
+            {harshCrop ? (
+              <p className="text-xs text-muted-foreground">
+                Saves your outline as a rectangle on a white background — no
+                edge detection.
+              </p>
+            ) : null}
+          </div>
+
           <div className="flex items-center justify-between gap-3">
             <label
               htmlFor="detection-sensitivity"
@@ -470,7 +494,7 @@ export function RegionRedrawDialog({
             max={100}
             step={1}
             value={sensitivity}
-            disabled={isPending || !canPreview}
+            disabled={isPending || !canPreview || harshCrop}
             onChange={(event) => setSensitivity(Number(event.target.value))}
             className="w-full accent-foreground"
           />
@@ -479,9 +503,9 @@ export function RegionRedrawDialog({
             <span>Remove more</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            Peels background inward from your outline. Higher keeps flooding
-            through weak color changes and only stops at strong contrast.
-            Lower stops sooner, so more of the outline stays.
+            {harshCrop
+              ? "Sensitivity is ignored while harsh crop is on."
+              : "Peels background inward from your outline. Higher keeps flooding through weak color changes and only stops at strong contrast. Lower stops sooner, so more of the outline stays. Separate shapes outside the main garment are dropped when they aren’t the same color family."}
           </p>
         </div>
 

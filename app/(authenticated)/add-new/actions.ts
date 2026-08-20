@@ -346,18 +346,21 @@ const redetectRegionSchema = z.object({
   points: z.array(regionPointSchema).min(3),
   replaceItemId: z.string().uuid().optional().nullable(),
   sensitivity: z.number().min(0).max(100).optional().default(50),
+  harshCrop: z.boolean().optional().default(false),
 });
 
 const redetectPreviewSchema = z.object({
   sessionId: z.string().uuid(),
   points: z.array(regionPointSchema).min(3),
   sensitivity: z.number().min(0).max(100).optional().default(50),
+  harshCrop: z.boolean().optional().default(false),
 });
 
 export async function previewRedetectRegionAction(input: {
   sessionId: string;
   points: Array<{ x: number; y: number }>;
   sensitivity?: number;
+  harshCrop?: boolean;
 }) {
   const { id: userId } = await requireUser();
   const parsed = redetectPreviewSchema.parse(input);
@@ -380,6 +383,7 @@ export async function previewRedetectRegionAction(input: {
     sourcePath: session.source_image_path,
     points: parsed.points,
     sensitivity: parsed.sensitivity,
+    harshCrop: parsed.harshCrop,
   });
 
   return {
@@ -397,6 +401,7 @@ export async function redetectRegionAction(input: {
   points: Array<{ x: number; y: number }>;
   replaceItemId?: string | null;
   sensitivity?: number;
+  harshCrop?: boolean;
 }) {
   const { id: userId } = await requireUser();
   const parsed = redetectRegionSchema.parse(input);
@@ -435,6 +440,7 @@ export async function redetectRegionAction(input: {
       region: { points: parsed.points },
       replace_item_id: parsed.replaceItemId ?? null,
       sensitivity: parsed.sensitivity,
+      harsh_crop: parsed.harshCrop,
     },
   });
 
@@ -447,6 +453,7 @@ export async function redetectRegionAction(input: {
       points: parsed.points,
       replaceItemId: parsed.replaceItemId,
       sensitivity: parsed.sensitivity,
+      harshCrop: parsed.harshCrop,
     });
 
     const newItems = await Promise.all(
