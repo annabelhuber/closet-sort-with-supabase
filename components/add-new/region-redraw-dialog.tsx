@@ -32,12 +32,27 @@ type RegionRedrawDialogProps = {
   sessionId: string;
   sourceImageUrl: string;
   replaceItemId?: string | null;
+  /** When true, start with a closed outline around the full photo. */
+  initialFullFrame?: boolean;
+  /** Empty auto-detect recovery vs fixing/adding. */
+  mode?: "fix" | "add" | "no_detection";
   onClose: () => void;
   onComplete: (result: {
     replacedItemId: string | null;
     items: Array<DetectedItem & { imageUrl: string }>;
   }) => void;
 };
+
+function fullFramePoints(width: number, height: number): Point[] {
+  const maxX = Math.max(width - 1, 0);
+  const maxY = Math.max(height - 1, 0);
+  return [
+    { x: 0, y: 0 },
+    { x: maxX, y: 0 },
+    { x: maxX, y: maxY },
+    { x: 0, y: maxY },
+  ];
+}
 
 function measureImageLayout(
   container: HTMLElement,
@@ -72,12 +87,15 @@ export function RegionRedrawDialog({
   sessionId,
   sourceImageUrl,
   replaceItemId = null,
+  initialFullFrame = false,
+  mode = "fix",
   onClose,
   onComplete,
 }: RegionRedrawDialogProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const previewRequestId = useRef(0);
+  const shouldSeedFullFrame = useRef(false);
   const [points, setPoints] = useState<Point[]>([]);
   const [closed, setClosed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +106,22 @@ export function RegionRedrawDialog({
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  const clearPreview = useCallback(() => {
+    previewRequestId.current += 1;
+    setPreviewCrops([]);
+    setPreviewError(null);
+    setIsPreviewing(false);
+  }, []);
+
+  const applyFullFrameIfNeeded = useCallback((image: HTMLImageElement) => {
+    if (!shouldSeedFullFrame.current || !image.naturalWidth || !image.naturalHeight) {
+      return;
+    }
+    shouldSeedFullFrame.current = false;
+    setPoints(fullFramePoints(image.naturalWidth, image.naturalHeight));
+    setClosed(true);
+  }, []);
+
   const refreshLayout = useCallback(() => {
     const container = containerRef.current;
     const image = imageRef.current;
@@ -95,14 +129,8 @@ export function RegionRedrawDialog({
       return;
     }
     setLayout(measureImageLayout(container, image));
-  }, []);
-
-  const clearPreview = useCallback(() => {
-    previewRequestId.current += 1;
-    setPreviewCrops([]);
-    setPreviewError(null);
-    setIsPreviewing(false);
-  }, []);
+    applyFullFrameIfNeeded(image);
+  }, [applyFullFrameIfNeeded]);
 
   useEffect(() => {
     if (!open) {
@@ -114,7 +142,20 @@ export function RegionRedrawDialog({
     setLayout(null);
     setSensitivity(50);
     clearPreview();
-  }, [open, sourceImageUrl, replaceItemId, clearPreview]);
+    shouldSeedFullFrame.current = initialFullFrame;
+    // If the image is already cached/loaded, seed immediately.
+    const image = imageRef.current;
+    if (image?.complete) {
+      refreshLayout();
+    }
+  }, [
+    open,
+    sourceImageUrl,
+    replaceItemId,
+    initialFullFrame,
+    clearPreview,
+    refreshLayout,
+  ]);
 
   useEffect(() => {
     if (!open) {
@@ -132,7 +173,7 @@ export function RegionRedrawDialog({
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isPending) {
+      if (event.key === "Escape" && !isPending && mode !== "no_detection") {
         onClose();
       }
       if (event.key === "Enter" && points.length >= 3 && !closed) {
@@ -143,7 +184,7 @@ export function RegionRedrawDialog({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, isPending, onClose, points.length, closed]);
+  }, [open, isPending, onClose, points.length, closed, mode]);
 
   useEffect(() => {
     if (!open || !closed || points.length < 3 || isPending) {
@@ -166,7 +207,7 @@ export function RegionRedrawDialog({
         setPreviewCrops(result.items);
         if (result.items.length === 0) {
           setPreviewError(
-            "No clothing detected at this sensitivity. Try raising it.",
+            "No clothing detected at this sensitivity. Try raising it or tightening the outline.",
           );
         }
       } catch (previewFailure) {
@@ -286,18 +327,23 @@ export function RegionRedrawDialog({
     .join(" ");
 
   const canPreview = closed && points.length >= 3;
+  const title =
+    mode === "no_detection"
+      ? "No clothing detected"
+      : replaceItemId
+        ? "Fix crop"
+        : "Add missing item";
+  const description =
+    mode === "no_detection"
+      ? "We couldn’t find clothing automatically. The full photo is selected—adjust the outline and sensitivity until the crop looks right, then save."
+      : "Click to place points around the clothing. Close the shape, then adjust sensitivity to preview the crop before saving.";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="flex max-h-[95vh] w-full max-w-5xl flex-col gap-4 overflow-y-auto rounded-lg bg-background p-4 shadow-lg">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold">
-            {replaceItemId ? "Fix crop" : "Add missing item"}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Click to place points around the clothing. Close the shape, then
-            adjust sensitivity to preview the crop before saving.
-          </p>
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -429,9 +475,14 @@ export function RegionRedrawDialog({
             className="w-full accent-foreground"
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Less sensitive</span>
-            <span>More sensitive</span>
+            <span>Remove less</span>
+            <span>Remove more</span>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Peels background inward from your outline. Higher keeps flooding
+            through weak color changes and only stops at strong contrast.
+            Lower stops sooner, so more of the outline stays.
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -459,26 +510,51 @@ export function RegionRedrawDialog({
           >
             Clear
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isPending || points.length < 3 || closed}
-            onClick={() => setClosed(true)}
-          >
-            Close shape
-          </Button>
+          {closed ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => {
+                setClosed(false);
+                clearPreview();
+              }}
+            >
+              Edit outline
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isPending || points.length < 3}
+              onClick={() => setClosed(true)}
+            >
+              Close shape
+            </Button>
+          )}
           <div className="flex-1" />
+          {mode !== "no_detection" ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isPending}
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+          ) : (
+            <Button asChild variant="outline" disabled={isPending}>
+              <a href="/add-new">Upload another photo</a>
+            </Button>
+          )}
           <Button
             type="button"
-            variant="outline"
-            disabled={isPending}
-            onClick={onClose}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={isPending || points.length < 3 || isPreviewing}
+            disabled={
+              isPending ||
+              points.length < 3 ||
+              isPreviewing ||
+              previewCrops.length === 0
+            }
             onClick={runDetection}
           >
             {isPending ? "Saving..." : "Save crop"}

@@ -76,10 +76,15 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Review detected items</h1>
+        <h1 className="text-2xl font-bold">
+          {reviewItems.length === 0
+            ? "Outline your clothing"
+            : "Review detected items"}
+        </h1>
         <p className="mt-2 text-muted-foreground">
-          Edit the suggested details for each item, then add them to your closet.
-          Use Fix crop if an outline looks wrong.
+          {reviewItems.length === 0
+            ? "Nothing was detected automatically. Use the full photo outline, adjust the crop and sensitivity, then save."
+            : "Edit the suggested details for each item, then add them to your closet. Use Fix crop if an outline looks wrong."}
         </p>
       </div>
       <ReviewItemsForm

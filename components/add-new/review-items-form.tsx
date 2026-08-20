@@ -21,14 +21,18 @@ export function ReviewItemsForm({
   initialItems: ReviewItem[];
   initialLocationSuggestions: string[];
 }) {
+  const startedEmpty = initialItems.length === 0;
   const [items, setItems] = useState(initialItems);
   const [locationSuggestions, setLocationSuggestions] = useState(
     initialLocationSuggestions,
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [redrawOpen, setRedrawOpen] = useState(false);
+  const [redrawOpen, setRedrawOpen] = useState(startedEmpty);
   const [replaceItemId, setReplaceItemId] = useState<string | null>(null);
+  const [redrawMode, setRedrawMode] = useState<"fix" | "add" | "no_detection">(
+    startedEmpty ? "no_detection" : "fix",
+  );
 
   const visibleItems = useMemo(() => items, [items]);
 
@@ -47,11 +51,13 @@ export function ReviewItemsForm({
 
   const openFixCrop = (itemId: string) => {
     setReplaceItemId(itemId);
+    setRedrawMode("fix");
     setRedrawOpen(true);
   };
 
-  const openAddMissing = () => {
+  const openAddMissing = (mode: "add" | "no_detection" = "add") => {
     setReplaceItemId(null);
+    setRedrawMode(mode);
     setRedrawOpen(true);
   };
 
@@ -92,12 +98,18 @@ export function ReviewItemsForm({
       {visibleItems.length === 0 ? (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            No items left to review. Draw around a missing item, upload another
-            photo, or view your closet.
+            {startedEmpty
+              ? "Nothing was detected automatically. Outline the clothing on the photo and adjust sensitivity to create a crop."
+              : "No items left to review. Draw around a missing item, upload another photo, or view your closet."}
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={openAddMissing}>
-              Add missing item
+            <Button
+              type="button"
+              onClick={() =>
+                openAddMissing(startedEmpty ? "no_detection" : "add")
+              }
+            >
+              {startedEmpty ? "Outline clothing" : "Add missing item"}
             </Button>
             <Button asChild>
               <a href="/add-new">Back to upload</a>
@@ -125,7 +137,11 @@ export function ReviewItemsForm({
           </div>
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={openAddMissing}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openAddMissing("add")}
+            >
               Add missing item
             </Button>
             <Button type="button" onClick={confirmAll} disabled={isPending}>
@@ -140,6 +156,8 @@ export function ReviewItemsForm({
         sessionId={sessionId}
         sourceImageUrl={sourceImageUrl}
         replaceItemId={replaceItemId}
+        initialFullFrame={redrawMode === "no_detection"}
+        mode={redrawMode}
         onClose={() => setRedrawOpen(false)}
         onComplete={handleRedetectComplete}
       />
